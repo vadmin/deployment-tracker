@@ -16,7 +16,7 @@ RUN npm install
 RUN mkdir -p /data
 VOLUME /data
 
-# Copy application source and public directory
+# Copy application source and public directory (if base dir is clean, if not - we need to mod this)
 COPY . .
 
 # Ensure public directory has proper permissions
