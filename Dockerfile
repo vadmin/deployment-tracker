@@ -42,4 +42,3 @@ CMD ["npm", "start"]
 # The volume is mounted to the /data directory in the container, allowing for easy access to the database files from the host machine.
 # The environment variable DB_PATH is set to point to the SQLite database file in the mounted volume.
 # This allows the application to know where to find the database file when it starts up.
-# The Dockerfile is designed to be used in a development environment, where the SQLite database is stored in a volume for easy access and persistence.
