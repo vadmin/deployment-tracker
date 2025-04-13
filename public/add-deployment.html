@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add New Deployment</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+</head>
+<body>
+    <h1>Add New Deployment</h1>
+    
+    <div class="nav-links">
+        <a href="/">← Back to Deployments</a>
+    </div>
+    
+    <div id="message-container"></div>
+    
+    <div class="form-container">
+        <div class="api-key-section">
+            <h3>API Authentication</h3>
+            <p>An API key is required to add deployments. Please enter your API key below:</p>
+            <div class="api-key-input">
+                <input type="text" id="api-key" placeholder="Enter your API key" />
+            </div>
+        </div>
+
+        <form id="deployment-form">
+            <div class="form-group">
+                <label for="application">Application:</label>
+                <select id="application" name="application" required>
+                    <option value="">Select an application</option>
+                    <!-- Applications will be loaded dynamically -->
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="region">Region:</label>
+                <select id="region" name="region" required>
+                    <option value="">Select a region</option>
+                    <!-- Regions will be loaded dynamically -->
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="date">Deployment Date:</label>
+                <input type="date" id="date" name="date" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="time">Deployment Time:</label>
+                <input type="time" id="time" name="time" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="result">Deployment Result:</label>
+                <select id="result" name="result" required>
+                    <option value="">Select a result</option>
+                    <option value="success">Success</option>
+                    <option value="failure">Failure</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="tag">Application Tag (optional):</label>
+                <input type="text" id="tag" name="tag" placeholder="e.g., v1.0.0">
+            </div>
+            
+            <div class="btn-group">
+                <button type="button" class="btn-secondary" onclick="resetForm()">Reset</button>
+                <button type="submit" class="btn-primary">Add Deployment</button>
+            </div>
+        </form>
+    </div>
+    
+    <script>
+        // DOM elements
+        const deploymentForm = document.getElementById('deployment-form');
+        const applicationSelect = document.getElementById('application');
+        const regionSelect = document.getElementById('region');
+        const apiKeyInput = document.getElementById('api-key');
+        const messageContainer = document.getElementById('message-container');
+        
+        // Check for stored API key
+        const storedApiKey = ApiKeyUtils.getStoredApiKey();
+        if (storedApiKey) {
+            apiKeyInput.value = storedApiKey;
+        }
+        
+        // Set default date to today
+        document.getElementById('date').valueAsDate = new Date();
+        
+        // Load applications
+        async function loadApplications() {
+            try {
+                const response = await fetch(`${APP_CONFIG.API_URL}/applications`, {
+                    headers: getApiKeyHeaders()
+                });
+                
+                if (!response.ok) {
+                    throw new Error(response.statusText);
+                }
+                
+                const applications = await response.json();
+                
+                applications.forEach(app => {
+                    const option = document.createElement('option');
+                    option.value = app.ID;
+                    option.textContent = app.Name;
+                    applicationSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading applications:', error);
+                showMessage('Error loading applications. Please check your API key.', 'error');
+            }
+        }
+        
+        // Load regions
+        async function loadRegions() {
+            try {
+                const response = await fetch(`${APP_CONFIG.API_URL}/regions`, {
+                    headers: getApiKeyHeaders()
+                });
+                
+                if (!response.ok) {
+                    throw new Error(response.statusText);
+                }
+                
+                const regions = await response.json();
+                
+                regions.forEach(region => {
+                    const option = document.createElement('option');
+                    option.value = region.ID;
+                    option.textContent = region.Name;
+                    regionSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading regions:', error);
+                showMessage('Error loading regions. Please check your API key.', 'error');
+            }
+        }
+        
+        // Get API key headers
+        function getApiKeyHeaders() {
+            const apiKey = apiKeyInput.value.trim();
+            return ApiKeyUtils.getApiKeyHeaders(apiKey);
+        }
+        
+        // Show message
+        function showMessage(message, type = 'success') {
+            UIUtils.showMessage(message, type, messageContainer);
+        }
+        
+        // Reset form
+        function resetForm() {
+            deploymentForm.reset();
+            document.getElementById('date').valueAsDate = new Date();
+        }
+        
+        // Handle API key change
+        apiKeyInput.addEventListener('change', () => {
+            const apiKey = apiKeyInput.value.trim();
+            if (apiKey) {
+                // Store API key in local storage
+                ApiKeyUtils.storeApiKey(apiKey);
+                
+                // Reload data with new API key
+                applicationSelect.innerHTML = '<option value="">Select an application</option>';
+                regionSelect.innerHTML = '<option value="">Select a region</option>';
+                loadApplications();
+                loadRegions();
+            }
+        });
+        
+        // Handle form submission
+        deploymentForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                showMessage('Please enter an API key', 'error');
+                return;
+            }
+            
+            const formData = {
+                applicationId: parseInt(applicationSelect.value),
+                regionId: parseInt(regionSelect.value),
+                date: document.getElementById('date').value,
+                time: document.getElementById('time').value,
+                result: document.getElementById('result').value,
+                tag: document.getElementById('tag').value || null
+            };
+            
+            try {
+                const response = await fetch(`${APP_CONFIG.API_URL}/deployments`, {
+                    method: 'POST',
+                    headers: getApiKeyHeaders(),
+                    body: JSON.stringify(formData)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || response.statusText);
+                }
+                
+                const result = await response.json();
+                
+                showMessage('Deployment added successfully');
+                resetForm();
+            } catch (error) {
+                console.error('Error adding deployment:', error);
+                showMessage(`Error adding deployment: ${error.message}`, 'error');
+            }
+        });
+        
+        // Initialize the page
+        loadApplications();
+        loadRegions();
+    </script>
+</body>
+</html>

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Key Management</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/js/config.js"></script>
+    <script src="/js/utils.js"></script>
+</head>
+<body>
+    <h1>API Key Management</h1>
+    
+    <div class="nav-links">
+        <a href="/">← Back to Deployments</a>
+    </div>
+    
+    <div id="message-container"></div>
+    
+    <div class="admin-container">
+        <h2>Create New API Key</h2>
+        <form id="create-key-form" class="key-form">
+            <input type="text" id="key-name" placeholder="Enter key name or purpose" required>
+            <button type="submit" class="btn btn-primary">Create Key</button>
+        </form>
+        
+        <h2>API Keys</h2>
+        <div id="keys-container">
+            <p class="loading">Loading API keys...</p>
+        </div>
+    </div>
+    
+    <script>
+        // DOM elements
+        const createKeyForm = document.getElementById('create-key-form');
+        const keyNameInput = document.getElementById('key-name');
+        const keysContainer = document.getElementById('keys-container');
+        const messageContainer = document.getElementById('message-container');
+        
+        // Admin API URL
+        const ADMIN_API_URL = `${APP_CONFIG.API_URL}/admin`;
+        
+        // Show message
+        function showMessage(message, type = 'success') {
+            UIUtils.showMessage(message, type, messageContainer);
+        }
+        
+        // Load API keys
+        async function loadApiKeys() {
+            keysContainer.innerHTML = '<p class="loading">Loading API keys...</p>';
+            
+            try {
+                const response = await fetch(`${ADMIN_API_URL}/keys`);
+                
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status}`);
+                }
+                
+                const keys = await response.json();
+                
+                if (keys.length === 0) {
+                    keysContainer.innerHTML = '<p>No API keys found.</p>';
+                    return;
+                }
+                
+                let html = '';
+                
+                keys.forEach(key => {
+                    const statusClass = key.Active ? 'status-active' : 'status-inactive';
+                    const statusText = key.Active ? 'Active' : 'Inactive';
+                    const actionBtnClass = key.Active ? 'btn-warning' : 'btn-success';
+                    const actionBtnText = key.Active ? 'Deactivate' : 'Activate';
+                    
+                    html += `
+                        <div class="key-item" data-key-id="${key.ID}">
+                            <div class="key-header">
+                                <span class="key-name">${key.KeyName}</span>
+                                <span class="status-badge ${statusClass}">${statusText}</span>
+                            </div>
+                            <div class="key-meta">Created: ${UIUtils.formatDate(key.Created)}</div>
+                            <div class="key-meta">Last Used: ${UIUtils.formatDate(key.LastUsed)}</div>
+                            <div class="key-meta">API Key: ${key.ApiKey} 
+                                <button class="copy-btn" data-key="${key.ApiKey}">Copy Full Key</button>
+                            </div>
+                            <div class="key-actions">
+                                <button class="btn ${actionBtnClass} toggle-key-btn" 
+                                        data-active="${key.Active ? '1' : '0'}">
+                                    ${actionBtnText}
+                                </button>
+                                <button class="btn btn-danger delete-key-btn">Delete</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                keysContainer.innerHTML = html;
+                
+                // Add event listeners for key actions
+                document.querySelectorAll('.toggle-key-btn').forEach(btn => {
+                    btn.addEventListener('click', toggleKeyStatus);
+                });
+                
+                document.querySelectorAll('.delete-key-btn').forEach(btn => {
+                    btn.addEventListener('click', deleteKey);
+                });
+                
+                document.querySelectorAll('.copy-btn').forEach(btn => {
+                    btn.addEventListener('click', async function() {
+                        try {
+                            // Get full key via API
+                            const keyId = this.closest('.key-item').getAttribute('data-key-id');
+                            const response = await fetch(`${ADMIN_API_URL}/keys/${keyId}/full`);
+                            
+                            if (!response.ok) {
+                                throw new Error(`Error: ${response.status}`);
+                            }
+                            
+                            const data = await response.json();
+                            await navigator.clipboard.writeText(data.apiKey);
+                            
+                            // Show temporary message
+                            const originalText = this.textContent;
+                            this.textContent = 'Copied!';
+                            setTimeout(() => {
+                                this.textContent = originalText;
+                            }, 2000);
+                        } catch (error) {
+                            console.error('Error copying API key:', error);
+                            showMessage('Error copying API key', 'error');
+                        }
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error loading API keys:', error);
+                keysContainer.innerHTML = '<p class="error">Error loading API keys. Please try again.</p>';
+            }
+        }
+        
+        // Toggle key status
+        async function toggleKeyStatus() {
+            const keyItem = this.closest('.key-item');
+            const keyId = keyItem.getAttribute('data-key-id');
+            const currentActive = this.getAttribute('data-active') === '1';
+            const newActive = !currentActive;
+            
+            try {
+                const response = await fetch(`${ADMIN_API_URL}/keys/${keyId}/toggle`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ active: newActive })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status}`);
+                }
+                
+                showMessage(`API key ${newActive ? 'activated' : 'deactivated'} successfully`);
+                loadApiKeys();
+            } catch (error) {
+                console.error('Error toggling API key status:', error);
+                showMessage('Error updating API key', 'error');
+            }
+        }
+        
+        // Delete key
+        async function deleteKey() {
+            if (!confirm('Are you sure you want to delete this API key? This action cannot be undone.')) {
+                return;
+            }
+            
+            const keyItem = this.closest('.key-item');
+            const keyId = keyItem.getAttribute('data-key-id');
+            
+            try {
+                const response = await fetch(`${ADMIN_API_URL}/keys/${keyId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status}`);
+                }
+                
+                showMessage('API key deleted successfully');
+                loadApiKeys();
+            } catch (error) {
+                console.error('Error deleting API key:', error);
+                showMessage('Error deleting API key', 'error');
+            }
+        }
+        
+        // Create new API key
+        createKeyForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const keyName = keyNameInput.value.trim();
+            
+            if (!keyName) {
+                showMessage('Please enter a key name', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${ADMIN_API_URL}/keys`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ keyName })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Show the newly created key
+                showMessage('API key created successfully');
+                
+                // Show the full API key to copy (only shown once!)
+                const keyDisplay = document.createElement('div');
+                keyDisplay.classList.add('message', 'message-success');
+                keyDisplay.innerHTML = `
+                    <strong>New API Key Created:</strong>
+                    <p>This key will only be shown once. Make sure to copy it now:</p>
+                    <div class="api-key-full">${result.key.apiKey}</div>
+                    <button class="btn btn-primary" onclick="navigator.clipboard.writeText('${result.key.apiKey}')">
+                        Copy Key
+                    </button>
+                `;
+                
+                messageContainer.appendChild(keyDisplay);
+                
+                // Reset the form
+                keyNameInput.value = '';
+                
+                // Reload the keys list
+                loadApiKeys();
+            } catch (error) {
+                console.error('Error creating API key:', error);
+                showMessage('Error creating API key', 'error');
+            }
+        });
+        
+        // Initialize
+        loadApiKeys();
+    </script>
+</body>
+</html>

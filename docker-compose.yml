@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "0.0.0.0:3000:3000"
+    volumes:
+      - ./data:/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_PATH=/data/deployments.db
+    restart: unless-stopped
+    # Uncomment the line below if you're having connection issues (makes the container use the host network instead of bridge)
+    # This is not recommended for production use, but can help with local development issues.
+    # network_mode: "host"

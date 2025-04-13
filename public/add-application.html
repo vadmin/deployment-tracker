@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Add New Application</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+  </head>
+  <body>
+    <h1>Add New Application</h1>
+    <div class="nav-links">
+      <a href="/">← Back to Deployments</a>
+    </div>
+
+    <div id="message-container"></div>
+
+    <div class="form-container">
+      <div class="api-key-section">
+        <h3>API Authentication</h3>
+        <p>
+          An API key is required to add applications. Please enter your API key
+          below:
+        </p>
+        <div class="api-key-input">
+          <input type="text" id="api-key" placeholder="Enter your API key" />
+        </div>
+      </div>
+
+      <form id="add-application-form">
+        <div class="form-group">
+          <label for="application-name">Application Name:</label>
+          <input
+            type="text"
+            id="application-name"
+            placeholder="Enter application name"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="application-description">Description:</label>
+          <textarea
+            id="application-description"
+            placeholder="Enter application description"
+          ></textarea>
+        </div>
+        <div class="btn-group">
+          <button type="button" class="btn-secondary" onclick="resetForm()">
+            Reset
+          </button>
+          <button type="submit" class="btn-primary">Add Application</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Existing Applications Section -->
+    <div class="form-container">
+      <div class="existing-applications-section">
+        <h2>Existing Applications</h2>
+        <div id="applications-container">
+          <p class="loading">Loading applications...</p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // DOM elements
+      const applicationForm = document.getElementById("add-application-form");
+      const applicationNameInput = document.getElementById("application-name");
+      const applicationDescriptionInput = document.getElementById(
+        "application-description"
+      );
+      const apiKeyInput = document.getElementById("api-key");
+      const messageContainer = document.getElementById("message-container");
+      const applicationsContainer = document.getElementById(
+        "applications-container"
+      );
+
+      // Check for stored API key
+      const storedApiKey = ApiKeyUtils.getStoredApiKey();
+      // if (storedApiKey) {
+      //     apiKeyInput.value = storedApiKey;
+      // }
+      if (storedApiKey) {
+        apiKeyInput.value = storedApiKey;
+        // Load applications on page load if API key is available
+        loadApplications();
+      } else {
+        applicationsContainer.innerHTML =
+          '<p class="empty-message">Enter API key to view existing applications</p>';
+      }
+
+      // Get API key headers
+      function getApiKeyHeaders() {
+        const apiKey = apiKeyInput.value.trim();
+        return ApiKeyUtils.getApiKeyHeaders(apiKey);
+      }
+
+      // Show message
+      function showMessage(message, type = "success") {
+        UIUtils.showMessage(message, type, messageContainer);
+      }
+
+      // Reset form
+      function resetForm() {
+        applicationForm.reset();
+      }
+
+      // Load applications
+      async function loadApplications() {
+        applicationsContainer.innerHTML =
+          '<p class="loading">Loading applications...</p>';
+
+        try {
+          const response = await fetch(`${APP_CONFIG.API_URL}/applications`, {
+            headers: getApiKeyHeaders(),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to load applications");
+          }
+
+          const applications = await response.json();
+
+          if (applications.length === 0) {
+            applicationsContainer.innerHTML =
+              '<p class="empty-message">No applications found</p>';
+            return;
+          }
+
+          renderApplicationsTable(applications);
+        } catch (error) {
+          console.error("Error loading applications:", error);
+          applicationsContainer.innerHTML = `<p class="error-message">Error loading applications: ${error.message}</p>`;
+        }
+      }
+
+      // Render applications table
+      function renderApplicationsTable(applications) {
+        let html = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+        applications.forEach((app) => {
+          html += `
+                    <tr>
+                        <td>${app.ID}</td>
+                        <td>${app.Name}</td>
+                        <td>${app.Description || "-"}</td>
+                    </tr>
+                `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            `;
+
+        applicationsContainer.innerHTML = html;
+      }
+
+      // Handle API key change
+      apiKeyInput.addEventListener("change", () => {
+        const apiKey = apiKeyInput.value.trim();
+        if (apiKey) {
+          // Store API key in local storage
+          ApiKeyUtils.storeApiKey(apiKey);
+        }
+      });
+
+      // Handle form submission
+      applicationForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const apiKey = apiKeyInput.value.trim();
+        if (!apiKey) {
+          showMessage("Please enter an API key", "error");
+          return;
+        }
+
+        const name = applicationNameInput.value.trim();
+        const description = applicationDescriptionInput.value.trim();
+
+        if (!name) {
+          showMessage("Application name is required", "error");
+          return;
+        }
+
+        try {
+          // Debug: Show the API key being used (first 8 chars only for security)
+          const apiKeyHeaders = getApiKeyHeaders();
+          const apiKeyDebug =
+            apiKeyHeaders["X-API-Key"].substring(0, 8) + "...";
+          console.log("Using API key:", apiKeyDebug);
+          showMessage(
+            `Attempting to add application with API key: ${apiKeyDebug}`,
+            "info"
+          );
+
+          const response = await fetch(`${APP_CONFIG.API_URL}/applications`, {
+            method: "POST",
+            headers: apiKeyHeaders,
+            body: JSON.stringify({ Name: name, Description: description }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to add application");
+          }
+
+          const result = await response.json();
+
+          showMessage(`Application "${result.Name}" added successfully!`);
+          resetForm();
+          loadApplications();
+        } catch (error) {
+          console.error("Error adding application:", error);
+          showMessage(`Error adding application: ${error.message}`, "error");
+        }
+      });
+
+      // Also apply key when pressing Enter in the input field
+      apiKeyInput.addEventListener("keyup", (e) => {
+        if (e.key === "Enter") {
+          const apiKey = apiKeyInput.value.trim();
+          if (apiKey) {
+            ApiKeyUtils.storeApiKey(apiKey);
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
