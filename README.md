@@ -14,7 +14,7 @@ A simple web application for tracking deployments across different applications 
 
 ## Project Structure
 
-```
+```ASCII
 deployment-tracker/
 ├── data/                  # SQLite database files
 ├── public/                # Frontend assets
@@ -63,50 +63,67 @@ The backend is built with Node.js and Express, with the following components:
 
 1. Clone the repository
 2. Install dependencies:
-   ```
+
+   ```shell
    npm install
    ```
+
 3. Start the development server:
-   ```
+
+   ```shell
    npm run dev
    ```
-4. Access the application at http://localhost:3000
+
+4. Access the application at <http://localhost:3000>
 
 ## Production Deployment
 
 The application is containerized with Docker for easy deployment:
 
 1. Build the Docker image:
-   ```
+
+   ```shell
    docker build -t deployment-tracker .
    ```
+
 2. Run the container:
-   ```
+
+   ```shell
    docker run -p 3000:3000 -v ./data:/data deployment-tracker
    ```
+
 3. Alternatively, use Docker Compose:
-   ```
+
+   ```shell
    docker-compose up -d
    ```
+
 4. If building and running locally, open Powershell and run:
-   ```
+
+   ```shell
    docker compose down && docker compose up -d --build
    ```
-5. Access the application at http://localhost:3000
+
+5. Access the application at <http://localhost:3000>
 6. To get the initial ApiKey, run the following command in a new terminal window:
-   ```
+
+   ```shell
    docker compose logs
    ```
+
    Then look for a line like this:
-   ```
+
+   ```shell
    Default API key created successfully. Key: 7c7181.............
    ```
+
    Another way to get it is to hit the endpoint:
 
    ![alt text](image.png)
-   
+
 7. To stop the application, run:
-   ```
+
+   ```shell
    docker compose down
    ```
 
@@ -162,7 +179,7 @@ All API endpoints (except those explicitly exempted) require an API key to be pr
    - Set up monitoring and metrics (Prometheus, Grafana)
    - Implement query optimization for database operations
 
-# Additional Note(s)
+## Additional Notes
 
 ## Using SQLite on Windows
 
@@ -189,45 +206,61 @@ If you need to inspect or modify the database directly on a Windows system, you 
 
 1. **Connect to the Database**:
    - Open a command prompt (cmd) and type:
+
      ```cmd
      sqlite3 path\to\your\database.db
      ```
+
    - Replace `path\to\your\database.db` with the actual path to your SQLite database file (e.g., `data/deployments.db`)
    - Example:
+
      ```cmd
      sqlite3 ./data/deployments.db
      ```
+
 2. **View Database Schema**:
    - To see the tables in the database, type (that "." is important):
+
      ```sql
      .tables
      ```
+
    - To view the schema of a specific table (e.g., `applications`), type:
-     ```
+
+     ```sql
      .schema applications
      ```
+
 3. **Query the Database**:
    - You can run SQL queries directly in the SQLite command prompt. For example, to view all applications, type:
+
      ```sql
      SELECT * FROM applications;
      ```
+
    - To exit the SQLite command prompt, type:
-     ```
+
+     ```sql
      .exit
      ```
+
 4. **Example Commands**:
    - To view all deployments:
+
      ```sql
      SELECT * FROM deployments;
      ```
+
    - To count the number of applications:
+
      ```sql
      SELECT COUNT(*) FROM applications;
      ```
+
    - To view all API keys:
+
       ```sql
       SELECT * FROM api_keys;
       ```
 
-
-## Have fun learning and building.
+## Have fun learning and building

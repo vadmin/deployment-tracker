@@ -2,10 +2,10 @@ const { db } = require('./db');
 
 // Sample applications
 const applications = [
-  { name: 'tsdsodspeims' },
-  { name: 'tsdsportal' },
-  { name: 'ccds-core' },
-  { name: 'tsdspeimspromotionsfork' }
+  { name: 'app_one' },
+  { name: 'app_two' },
+  { name: 'api_app1' },
+  { name: 'crazy_app_1' }
 ];
 
 // Sample regions
@@ -13,6 +13,7 @@ const regions = [
   { name: 'DEV' },
   { name: 'TEST' },
   { name: 'PROD' },
+  { name: 'QA' },
   { name: 'TRN' }
 ];
 
