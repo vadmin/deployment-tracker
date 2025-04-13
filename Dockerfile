@@ -30,8 +30,12 @@ ENV DB_PATH=/data/deployments.db
 
 # Start the application
 CMD ["npm", "start"]
+# Perhaps we should start using entrypoint instead of CMD? Variations?
+# ENTRYPOINT ["npm", "start"]
+# ENTRYPOINT ["/bin/sh", "-c", "npm start"]
 
-## all comments helped/created by AI assistant
+## All comments helped/created by AI assistant
+#-------------------------------------------------
 # The Dockerfile is designed to create a lightweight container for a Node.js application that uses SQLite as its database.
 # It uses the Alpine version of the Node.js image to keep the image size small.
 # The SQLite and its development libraries are installed to allow the application to interact with the SQLite database.
