@@ -1,341 +1,343 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Deployment Tracker</title>
-    <link rel="stylesheet" href="styles.css" />
-    <script src="js/config.js"></script>
-    <script src="js/utils.js"></script>
-  </head>
-  <body>
-    <h1>Deployment Tracker</h1>
 
-    <div class="actions">
-      <a href="/admin/keys.html" class="btn btn-secondary">Manage API Keys</a>
-      <a href="/add-deployment.html" class="btn btn-primary">Add New Deployment</a>
-      <a href="/add-application.html" class="btn btn-primary">Add New Application</a>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deployment Tracker</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+</head>
+
+<body>
+  <h1>Deployment Tracker</h1>
+
+  <div class="actions">
+    <a href="/admin/keys.html" class="btn btn-secondary">Manage API Keys</a>
+    <a href="/add-deployment.html" class="btn btn-primary">Add New Deployment</a>
+    <a href="/add-application.html" class="btn btn-primary">Add New Application</a>
+  </div>
+
+  <div class="api-key-section">
+    <h3>API Authentication</h3>
+    <p>Please enter your API key to access deployment data:</p>
+    <div class="api-key-input">
+      <input type="text" id="api-key" placeholder="Enter your API key" />
+      <button id="apply-key-btn" class="btn btn-primary">Apply Key</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="filter-group">
+      <label for="application">Application:</label>
+      <select id="application">
+        <option value="all">All Applications</option>
+        <!-- Applications will be loaded dynamically -->
+      </select>
+      <button id="compare-versions-btn" class="btn btn-secondary" disabled>
+        Compare Latest Versions
+      </button>
     </div>
 
-    <div class="api-key-section">
-      <h3>API Authentication</h3>
-      <p>Please enter your API key to access deployment data:</p>
-      <div class="api-key-input">
-        <input type="text" id="api-key" placeholder="Enter your API key" />
-        <button id="apply-key-btn" class="btn btn-primary">Apply Key</button>
-      </div>
+    <div class="filter-group">
+      <label for="region">Region:</label>
+      <select id="region">
+        <option value="all">All Regions</option>
+        <!-- Regions will be loaded dynamically -->
+      </select>
     </div>
+  </div>
 
-    <div class="filters">
-      <div class="filter-group">
-        <label for="application">Application:</label>
-        <select id="application">
-          <option value="all">All Applications</option>
-          <!-- Applications will be loaded dynamically -->
-        </select>
-        <button id="compare-versions-btn" class="btn btn-secondary" disabled>
-          Compare Latest Versions
-        </button>
-      </div>
+  <h2>Deployments</h2>
+  <div id="deployments-container">
+    <p class="loading">Loading deployments...</p>
+  </div>
 
-      <div class="filter-group">
-        <label for="region">Region:</label>
-        <select id="region">
-          <option value="all">All Regions</option>
-          <!-- Regions will be loaded dynamically -->
-        </select>
-      </div>
-    </div>
+  <script>
+    // Wait for DOM to be fully loaded
+    document.addEventListener("DOMContentLoaded", () => {
+      // DOM elements
+      const applicationSelect = document.getElementById("application");
+      const regionSelect = document.getElementById("region");
+      const deploymentsContainer = document.getElementById(
+        "deployments-container"
+      );
+      const apiKeyInput = document.getElementById("api-key");
+      const applyKeyBtn = document.getElementById("apply-key-btn");
+      const compareVersionsBtn = document.getElementById(
+        "compare-versions-btn"
+      );
+      const versionModal = document.getElementById("version-modal");
+      const closeModalBtn = document.querySelector(".close-modal");
+      const versionComparisonContainer = document.getElementById(
+        "version-comparison-container"
+      );
 
-    <h2>Deployments</h2>
-    <div id="deployments-container">
-      <p class="loading">Loading deployments...</p>
-    </div>
+      // Sorting state
+      let sortColumn = APP_CONFIG.DEFAULT_SORT_COLUMN;
+      let sortDirection = APP_CONFIG.DEFAULT_SORT_DIRECTION;
+      let currentDeployments = [];
 
-    <script>
-      // Wait for DOM to be fully loaded
-      document.addEventListener("DOMContentLoaded", () => {
-        // DOM elements
-        const applicationSelect = document.getElementById("application");
-        const regionSelect = document.getElementById("region");
-        const deploymentsContainer = document.getElementById(
-          "deployments-container"
-        );
-        const apiKeyInput = document.getElementById("api-key");
-        const applyKeyBtn = document.getElementById("apply-key-btn");
-        const compareVersionsBtn = document.getElementById(
-          "compare-versions-btn"
-        );
-        const versionModal = document.getElementById("version-modal");
-        const closeModalBtn = document.querySelector(".close-modal");
-        const versionComparisonContainer = document.getElementById(
-          "version-comparison-container"
-        );
+      // Check for stored API key
+      const storedApiKey = ApiKeyUtils.getStoredApiKey();
+      if (storedApiKey) {
+        apiKeyInput.value = storedApiKey;
+        // Initialize with stored key
+        initializeWithApiKey();
+      } else {
+        deploymentsContainer.innerHTML =
+          '<p class="empty-message">Please enter an API key to view deployments.</p>';
+      }
 
-        // Sorting state
-        let sortColumn = APP_CONFIG.DEFAULT_SORT_COLUMN;
-        let sortDirection = APP_CONFIG.DEFAULT_SORT_DIRECTION;
-        let currentDeployments = [];
+      // Get API key headers
+      function getApiKeyHeaders() {
+        const apiKey = apiKeyInput.value.trim();
+        return ApiKeyUtils.getApiKeyHeaders(apiKey);
+      }
 
-        // Check for stored API key
-        const storedApiKey = ApiKeyUtils.getStoredApiKey();
-        if (storedApiKey) {
-          apiKeyInput.value = storedApiKey;
-          // Initialize with stored key
-          initializeWithApiKey();
-        } else {
-          deploymentsContainer.innerHTML =
-            '<p class="empty-message">Please enter an API key to view deployments.</p>';
-        }
-
-        // Get API key headers
-        function getApiKeyHeaders() {
-          const apiKey = apiKeyInput.value.trim();
-          return ApiKeyUtils.getApiKeyHeaders(apiKey);
-        }
-
-        // Load applications
-        async function loadApplications() {
-          try {
-            const response = await fetch(`${APP_CONFIG.API_URL}/applications`, {
-              headers: getApiKeyHeaders(),
-            });
-
-            if (!response.ok) {
-              throw new Error(response.statusText);
-            }
-
-            const applications = await response.json();
-
-            // Clear existing options except the first one
-            while (applicationSelect.options.length > 1) {
-              applicationSelect.remove(1);
-            }
-
-            applications.forEach((app) => {
-              const option = document.createElement("option");
-              option.value = app.ID;
-              option.textContent = app.Name;
-              applicationSelect.appendChild(option);
-            });
-          } catch (error) {
-            console.error("Error loading applications:", error);
-            alert("Error loading applications. Please check your API key.");
-          }
-        }
-
-        // Load regions
-        async function loadRegions() {
-          try {
-            const response = await fetch(`${APP_CONFIG.API_URL}/regions`, {
-              headers: getApiKeyHeaders(),
-            });
-
-            if (!response.ok) {
-              throw new Error(response.statusText);
-            }
-
-            const regions = await response.json();
-
-            // Clear existing options except the first one
-            while (regionSelect.options.length > 1) {
-              regionSelect.remove(1);
-            }
-
-            regions.forEach((region) => {
-              const option = document.createElement("option");
-              option.value = region.ID;
-              option.textContent = region.Name;
-              regionSelect.appendChild(option);
-            });
-          } catch (error) {
-            console.error("Error loading regions:", error);
-            alert("Error loading regions. Please check your API key.");
-          }
-        }
-
-        // Load deployments based on selected filters
-        async function loadDeployments() {
-          deploymentsContainer.innerHTML =
-            '<p class="loading">Loading deployments...</p>';
-
-          try {
-            let url = `${APP_CONFIG.API_URL}/deployments`;
-
-            const applicationId = applicationSelect.value;
-            const regionId = regionSelect.value;
-
-            // Adjust URL based on filters
-            if (applicationId !== "all" && regionId === "all") {
-              url = `${APP_CONFIG.API_URL}/deployments/application/${applicationId}`;
-            } else if (applicationId === "all" && regionId !== "all") {
-              url = `${APP_CONFIG.API_URL}/deployments/region/${regionId}`;
-            } else if (applicationId !== "all" && regionId !== "all") {
-              // For both filters, we'll need to fetch all and filter client-side
-              // since the API doesn't support combined filtering
-              url = `${APP_CONFIG.API_URL}/deployments/application/${applicationId}`;
-            }
-
-            const response = await fetch(url, {
-              headers: getApiKeyHeaders(),
-            });
-
-            if (!response.ok) {
-              throw new Error(response.statusText);
-            }
-
-            let deployments = await response.json();
-
-            // Client-side filtering for combined filters
-            if (applicationId !== "all" && regionId !== "all") {
-              deployments = deployments.filter((dep) =>
-                dep.Region_ID
-                  ? dep.Region_ID === parseInt(regionId)
-                  : dep.Region ===
-                    regionSelect.options[regionSelect.selectedIndex].text
-              );
-            }
-
-            // Store current deployments for sorting
-            currentDeployments = deployments;
-
-            // Sort and render
-            sortDeployments();
-          } catch (error) {
-            console.error("Error loading deployments:", error);
-            deploymentsContainer.innerHTML =
-              '<p class="empty-message">Error loading deployments. Please check your API key.</p>';
-          }
-        }
-
-        // Sort deployments
-        function sortDeployments() {
-          // Clone the deployments array to avoid modifying the original
-          const sortedDeployments = [...currentDeployments];
-
-          sortedDeployments.sort((a, b) => {
-            let valueA, valueB;
-
-            // Handle different columns with appropriate data types
-            switch (sortColumn) {
-              case "ID":
-                valueA = a.ID;
-                valueB = b.ID;
-                break;
-              case "Application":
-                valueA = a.Application ? a.Application.toLowerCase() : "";
-                valueB = b.Application ? b.Application.toLowerCase() : "";
-                break;
-              case "Region":
-                valueA = a.Region ? a.Region.toLowerCase() : "";
-                valueB = b.Region ? b.Region.toLowerCase() : "";
-                break;
-              case "Date":
-                // Sort by date, then by time
-                valueA = new Date(`${a.Date}T${a.Time}`);
-                valueB = new Date(`${b.Date}T${b.Time}`);
-                break;
-              case "Time":
-                valueA = a.Time;
-                valueB = b.Time;
-                break;
-              case "Result":
-                valueA = a.Deployment_Result
-                  ? a.Deployment_Result.toLowerCase()
-                  : "";
-                valueB = b.Deployment_Result
-                  ? b.Deployment_Result.toLowerCase()
-                  : "";
-                break;
-              case "Tag":
-                valueA = a.Application_Tag
-                  ? a.Application_Tag.toLowerCase()
-                  : "";
-                valueB = b.Application_Tag
-                  ? b.Application_Tag.toLowerCase()
-                  : "";
-                break;
-              default:
-                valueA = a[sortColumn];
-                valueB = b[sortColumn];
-            }
-
-            // Handle the sort direction
-            const direction = sortDirection === "asc" ? 1 : -1;
-
-            // Compare
-            if (valueA < valueB) return -1 * direction;
-            if (valueA > valueB) return 1 * direction;
-            return 0;
+      // Load applications
+      async function loadApplications() {
+        try {
+          const response = await fetch(`${APP_CONFIG.API_URL}/applications`, {
+            headers: getApiKeyHeaders(),
           });
 
-          // Render with sorted data
-          renderDeployments(sortedDeployments);
-        }
-
-        // Handle column header click
-        function handleHeaderClick(column) {
-          // If clicking the same column, toggle direction
-          if (sortColumn === column) {
-            sortDirection = sortDirection === "asc" ? "desc" : "asc";
-          } else {
-            // New column, default to ascending
-            sortColumn = column;
-            sortDirection = "asc";
+          if (!response.ok) {
+            throw new Error(response.statusText);
           }
 
-          // Sort and re-render
+          const applications = await response.json();
+
+          // Clear existing options except the first one
+          while (applicationSelect.options.length > 1) {
+            applicationSelect.remove(1);
+          }
+
+          applications.forEach((app) => {
+            const option = document.createElement("option");
+            option.value = app.ID;
+            option.textContent = app.Name;
+            applicationSelect.appendChild(option);
+          });
+        } catch (error) {
+          console.error("Error loading applications:", error);
+          alert("Error loading applications. Please check your API key.");
+        }
+      }
+
+      // Load regions
+      async function loadRegions() {
+        try {
+          const response = await fetch(`${APP_CONFIG.API_URL}/regions`, {
+            headers: getApiKeyHeaders(),
+          });
+
+          if (!response.ok) {
+            throw new Error(response.statusText);
+          }
+
+          const regions = await response.json();
+
+          // Clear existing options except the first one
+          while (regionSelect.options.length > 1) {
+            regionSelect.remove(1);
+          }
+
+          regions.forEach((region) => {
+            const option = document.createElement("option");
+            option.value = region.ID;
+            option.textContent = region.Name;
+            regionSelect.appendChild(option);
+          });
+        } catch (error) {
+          console.error("Error loading regions:", error);
+          alert("Error loading regions. Please check your API key.");
+        }
+      }
+
+      // Load deployments based on selected filters
+      async function loadDeployments() {
+        deploymentsContainer.innerHTML =
+          '<p class="loading">Loading deployments...</p>';
+
+        try {
+          let url = `${APP_CONFIG.API_URL}/deployments`;
+
+          const applicationId = applicationSelect.value;
+          const regionId = regionSelect.value;
+
+          // Adjust URL based on filters
+          if (applicationId !== "all" && regionId === "all") {
+            url = `${APP_CONFIG.API_URL}/deployments/application/${applicationId}`;
+          } else if (applicationId === "all" && regionId !== "all") {
+            url = `${APP_CONFIG.API_URL}/deployments/region/${regionId}`;
+          } else if (applicationId !== "all" && regionId !== "all") {
+            // For both filters, we'll need to fetch all and filter client-side
+            // since the API doesn't support combined filtering
+            url = `${APP_CONFIG.API_URL}/deployments/application/${applicationId}`;
+          }
+
+          const response = await fetch(url, {
+            headers: getApiKeyHeaders(),
+          });
+
+          if (!response.ok) {
+            throw new Error(response.statusText);
+          }
+
+          let deployments = await response.json();
+
+          // Client-side filtering for combined filters
+          if (applicationId !== "all" && regionId !== "all") {
+            deployments = deployments.filter((dep) =>
+              dep.Region_ID
+                ? dep.Region_ID === parseInt(regionId)
+                : dep.Region ===
+                regionSelect.options[regionSelect.selectedIndex].text
+            );
+          }
+
+          // Store current deployments for sorting
+          currentDeployments = deployments;
+
+          // Sort and render
           sortDeployments();
+        } catch (error) {
+          console.error("Error loading deployments:", error);
+          deploymentsContainer.innerHTML =
+            '<p class="empty-message">Error loading deployments. Please check your API key.</p>';
         }
+      }
 
-        // Render deployments table
-        function renderDeployments(deployments) {
-          if (deployments.length === 0) {
-            deploymentsContainer.innerHTML =
-              '<p class="empty-message">No deployments found with the selected filters.</p>';
-            return;
+      // Sort deployments
+      function sortDeployments() {
+        // Clone the deployments array to avoid modifying the original
+        const sortedDeployments = [...currentDeployments];
+
+        sortedDeployments.sort((a, b) => {
+          let valueA, valueB;
+
+          // Handle different columns with appropriate data types
+          switch (sortColumn) {
+            case "ID":
+              valueA = a.ID;
+              valueB = b.ID;
+              break;
+            case "Application":
+              valueA = a.Application ? a.Application.toLowerCase() : "";
+              valueB = b.Application ? b.Application.toLowerCase() : "";
+              break;
+            case "Region":
+              valueA = a.Region ? a.Region.toLowerCase() : "";
+              valueB = b.Region ? b.Region.toLowerCase() : "";
+              break;
+            case "Date":
+              // Sort by date, then by time
+              valueA = new Date(`${a.Date}T${a.Time}`);
+              valueB = new Date(`${b.Date}T${b.Time}`);
+              break;
+            case "Time":
+              valueA = a.Time;
+              valueB = b.Time;
+              break;
+            case "Result":
+              valueA = a.Deployment_Result
+                ? a.Deployment_Result.toLowerCase()
+                : "";
+              valueB = b.Deployment_Result
+                ? b.Deployment_Result.toLowerCase()
+                : "";
+              break;
+            case "Tag":
+              valueA = a.Application_Tag
+                ? a.Application_Tag.toLowerCase()
+                : "";
+              valueB = b.Application_Tag
+                ? b.Application_Tag.toLowerCase()
+                : "";
+              break;
+            default:
+              valueA = a[sortColumn];
+              valueB = b[sortColumn];
           }
 
-          const columns = [
-            { key: "ID", label: "ID" },
-            { key: "Application", label: "Application" },
-            { key: "Region", label: "Region" },
-            { key: "Date", label: "Date" },
-            { key: "Time", label: "Time" },
-            { key: "Result", label: "Result" },
-            { key: "Tag", label: "Tag" },
-          ];
+          // Handle the sort direction
+          const direction = sortDirection === "asc" ? 1 : -1;
 
-          let html = `
+          // Compare
+          if (valueA < valueB) return -1 * direction;
+          if (valueA > valueB) return 1 * direction;
+          return 0;
+        });
+
+        // Render with sorted data
+        renderDeployments(sortedDeployments);
+      }
+
+      // Handle column header click
+      function handleHeaderClick(column) {
+        // If clicking the same column, toggle direction
+        if (sortColumn === column) {
+          sortDirection = sortDirection === "asc" ? "desc" : "asc";
+        } else {
+          // New column, default to ascending
+          sortColumn = column;
+          sortDirection = "asc";
+        }
+
+        // Sort and re-render
+        sortDeployments();
+      }
+
+      // Render deployments table
+      function renderDeployments(deployments) {
+        if (deployments.length === 0) {
+          deploymentsContainer.innerHTML =
+            '<p class="empty-message">No deployments found with the selected filters.</p>';
+          return;
+        }
+
+        const columns = [
+          { key: "ID", label: "ID" },
+          { key: "Application", label: "Application" },
+          { key: "Region", label: "Region" },
+          { key: "Date", label: "Date" },
+          { key: "Time", label: "Time" },
+          { key: "Result", label: "Result" },
+          { key: "Tag", label: "Tag" },
+        ];
+
+        let html = `
                 <table>
                     <thead>
                         <tr>
             `;
 
-          // Create headers with sorting
-          columns.forEach((column) => {
-            const classes = [];
-            if (sortColumn === column.key) {
-              classes.push(sortDirection);
-            }
-            html += `<th data-column="${column.key}" class="${classes.join(
-              " "
-            )}">${column.label}</th>`;
-          });
+        // Create headers with sorting
+        columns.forEach((column) => {
+          const classes = [];
+          if (sortColumn === column.key) {
+            classes.push(sortDirection);
+          }
+          html += `<th data-column="${column.key}" class="${classes.join(
+            " "
+          )}">${column.label}</th>`;
+        });
 
-          html += `
+        html += `
                         </tr>
                     </thead>
                     <tbody>
             `;
 
-          deployments.forEach((dep) => {
-            const resultClass =
-              dep.Deployment_Result.toLowerCase() === "success"
-                ? "success"
-                : "failure";
+        deployments.forEach((dep) => {
+          const resultClass =
+            dep.Deployment_Result.toLowerCase() === "success"
+              ? "success"
+              : "failure";
 
-            html += `
+          html += `
                     <tr>
                         <td>${dep.ID}</td>
                         <td>${dep.Application}</td>
@@ -346,128 +348,128 @@
                         <td>${dep.Application_Tag || "-"}</td>
                     </tr>
                 `;
-          });
+        });
 
-          html += `
+        html += `
                     </tbody>
                 </table>
             `;
 
-          deploymentsContainer.innerHTML = html;
+        deploymentsContainer.innerHTML = html;
 
-          // Add event listeners to the headers
-          document.querySelectorAll("th").forEach((th) => {
-            th.addEventListener("click", () => {
-              const column = th.getAttribute("data-column");
-              handleHeaderClick(column);
+        // Add event listeners to the headers
+        document.querySelectorAll("th").forEach((th) => {
+          th.addEventListener("click", () => {
+            const column = th.getAttribute("data-column");
+            handleHeaderClick(column);
+          });
+        });
+      }
+
+      // Initialize with API key
+      function initializeWithApiKey() {
+        const apiKey = apiKeyInput.value.trim();
+
+        if (apiKey) {
+          // Store API key in local storage
+          ApiKeyUtils.storeApiKey(apiKey);
+
+          // Load data with API key
+          Promise.all([loadApplications(), loadRegions()])
+            .then(() => loadDeployments())
+            .catch((error) => {
+              console.error("Error initializing with API key:", error);
             });
-          });
+        }
+      }
+
+      // Apply API key button click
+      applyKeyBtn.addEventListener("click", initializeWithApiKey);
+
+      // Parse version string (e.g., "Rel_1.2.3.4" -> [1, 2, 3, 4])
+      function parseVersionString(versionStr) {
+        if (!versionStr || typeof versionStr !== "string") return null;
+
+        // Check if it matches the expected format
+        const match = versionStr.match(/(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?$/);
+        if (!match) return null;
+
+        // Convert to numbers and return as array
+        return [
+          parseInt(match[1], 10),
+          match[2] ? parseInt(match[2], 10) : 0,
+          match[3] ? parseInt(match[3], 10) : 0,
+          match[4] ? parseInt(match[4], 10) : 0
+        ];
+      }
+
+      // Compare two version arrays
+      function compareVersions(versionA, versionB) {
+        if (!versionA) return versionB ? -1 : 0;
+        if (!versionB) return 1;
+
+        // Compare each segment
+        for (let i = 0; i < 4; i++) {
+          if (versionA[i] < versionB[i]) return -1;
+          if (versionA[i] > versionB[i]) return 1;
         }
 
-        // Initialize with API key
-        function initializeWithApiKey() {
-          const apiKey = apiKeyInput.value.trim();
+        return 0; // Versions are equal
+      }
 
-          if (apiKey) {
-            // Store API key in local storage
-            ApiKeyUtils.storeApiKey(apiKey);
+      // Get latest version for each region
+      function getLatestVersionsByRegion(deployments) {
+        // Group deployments by region
+        const regionDeployments = {};
 
-            // Load data with API key
-            Promise.all([loadApplications(), loadRegions()])
-              .then(() => loadDeployments())
-              .catch((error) => {
-                console.error("Error initializing with API key:", error);
-              });
+        // Initialize with common regions
+        const commonRegions = ["DEV", "TEST", "PROD", "TRN"];
+        commonRegions.forEach((region) => {
+          regionDeployments[region] = [];
+        });
+
+        // Group deployments by region
+        deployments.forEach((dep) => {
+          if (dep.Region && dep.Application_Tag) {
+            if (!regionDeployments[dep.Region]) {
+              regionDeployments[dep.Region] = [];
+            }
+            regionDeployments[dep.Region].push(dep);
           }
-        }
+        });
 
-        // Apply API key button click
-        applyKeyBtn.addEventListener("click", initializeWithApiKey);
+        // Find latest version for each region
+        const latestVersions = {};
 
-        // Parse version string (e.g., "Rel_1.2.3.4" -> [1, 2, 3, 4])
-        function parseVersionString(versionStr) {
-          if (!versionStr || typeof versionStr !== "string") return null;
+        Object.keys(regionDeployments).forEach((region) => {
+          const deployments = regionDeployments[region];
+          let latestDeployment = null;
+          let latestVersionArray = null;
 
-          // Check if it matches the expected format
-          const match = versionStr.match(/^Rel_(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-          if (!match) return null;
-
-          // Convert to numbers and return as array
-          return [
-            parseInt(match[1], 10),
-            parseInt(match[2], 10),
-            parseInt(match[3], 10),
-            parseInt(match[4], 10),
-          ];
-        }
-
-        // Compare two version arrays
-        function compareVersions(versionA, versionB) {
-          if (!versionA) return versionB ? -1 : 0;
-          if (!versionB) return 1;
-
-          // Compare each segment
-          for (let i = 0; i < 4; i++) {
-            if (versionA[i] < versionB[i]) return -1;
-            if (versionA[i] > versionB[i]) return 1;
-          }
-
-          return 0; // Versions are equal
-        }
-
-        // Get latest version for each region
-        function getLatestVersionsByRegion(deployments) {
-          // Group deployments by region
-          const regionDeployments = {};
-
-          // Initialize with common regions
-          const commonRegions = ["DEV", "TEST", "PROD", "TRN"];
-          commonRegions.forEach((region) => {
-            regionDeployments[region] = [];
-          });
-
-          // Group deployments by region
           deployments.forEach((dep) => {
-            if (dep.Region && dep.Application_Tag) {
-              if (!regionDeployments[dep.Region]) {
-                regionDeployments[dep.Region] = [];
+            const versionArray = parseVersionString(dep.Application_Tag);
+            if (versionArray) {
+              if (
+                !latestVersionArray ||
+                compareVersions(latestVersionArray, versionArray) < 0
+              ) {
+                latestVersionArray = versionArray;
+                latestDeployment = dep;
               }
-              regionDeployments[dep.Region].push(dep);
             }
           });
 
-          // Find latest version for each region
-          const latestVersions = {};
+          latestVersions[region] = latestDeployment;
+        });
 
-          Object.keys(regionDeployments).forEach((region) => {
-            const deployments = regionDeployments[region];
-            let latestDeployment = null;
-            let latestVersionArray = null;
+        return latestVersions;
+      }
 
-            deployments.forEach((dep) => {
-              const versionArray = parseVersionString(dep.Application_Tag);
-              if (versionArray) {
-                if (
-                  !latestVersionArray ||
-                  compareVersions(latestVersionArray, versionArray) < 0
-                ) {
-                  latestVersionArray = versionArray;
-                  latestDeployment = dep;
-                }
-              }
-            });
+      // Render version comparison table
+      function renderVersionComparison(latestVersions) {
+        const regions = Object.keys(latestVersions).sort();
 
-            latestVersions[region] = latestDeployment;
-          });
-
-          return latestVersions;
-        }
-
-        // Render version comparison table
-        function renderVersionComparison(latestVersions) {
-          const regions = Object.keys(latestVersions).sort();
-
-          let html = `
+        let html = `
                 <table class="version-table">
                     <thead>
                         <tr>
@@ -480,157 +482,158 @@
                     <tbody>
             `;
 
-          regions.forEach((region) => {
-            const deployment = latestVersions[region];
+        regions.forEach((region) => {
+          const deployment = latestVersions[region];
 
-            html += `<tr>
+          html += `<tr>
                     <td>${region}</td>`;
 
-            if (deployment) {
-              const resultClass =
-                deployment.Deployment_Result.toLowerCase() === "success"
-                  ? "success"
-                  : "failure";
+          if (deployment) {
+            const resultClass =
+              deployment.Deployment_Result.toLowerCase() === "success"
+                ? "success"
+                : "failure";
 
-              html += `
+            html += `
                         <td>${deployment.Application_Tag}</td>
                         <td>${deployment.Date} ${deployment.Time}</td>
                         <td class="${resultClass}">${deployment.Deployment_Result}</td>
                     `;
-            } else {
-              html += `
+          } else {
+            html += `
                         <td colspan="3" class="no-version">No deployments found</td>
                     `;
-            }
+          }
 
-            html += `</tr>`;
-          });
+          html += `</tr>`;
+        });
 
-          html += `
+        html += `
                     </tbody>
                 </table>
             `;
 
-          versionComparisonContainer.innerHTML = html;
-        }
+        versionComparisonContainer.innerHTML = html;
+      }
 
-        // Load and display version comparison
-        async function loadVersionComparison() {
-          versionComparisonContainer.innerHTML =
-            '<p class="loading">Loading version data...</p>';
+      // Load and display version comparison
+      async function loadVersionComparison() {
+        versionComparisonContainer.innerHTML =
+          '<p class="loading">Loading version data...</p>';
 
-          try {
-            const applicationId = applicationSelect.value;
-            const applicationName =
-              applicationSelect.options[applicationSelect.selectedIndex].text;
-
-            // Update modal title to include application name
-            document.querySelector(
-              ".modal-header h3"
-            ).textContent = `Latest Versions for ${applicationName}`;
-
-            // Fetch deployments for the selected application
-            const url = `${APP_CONFIG.API_URL}/deployments/application/${applicationId}`;
-
-            const response = await fetch(url, {
-              headers: getApiKeyHeaders(),
-            });
-
-            if (!response.ok) {
-              throw new Error(response.statusText);
-            }
-
-            const deployments = await response.json();
-
-            if (deployments.length === 0) {
-              versionComparisonContainer.innerHTML =
-                '<p class="empty-message">No deployments found for this application.</p>';
-              return;
-            }
-
-            // Get latest version for each region
-            const latestVersions = getLatestVersionsByRegion(deployments);
-
-            // Render the comparison table
-            renderVersionComparison(latestVersions);
-          } catch (error) {
-            console.error("Error loading version comparison:", error);
-            versionComparisonContainer.innerHTML =
-              '<p class="empty-message">Error loading version data. Please try again.</p>';
-          }
-        }
-
-        // Open modal
-        function openModal() {
-          versionModal.style.display = "block";
-          loadVersionComparison();
-        }
-
-        // Close modal
-        function closeModal() {
-          versionModal.style.display = "none";
-        }
-
-        // Update button state based on application selection
-        function updateCompareButtonState() {
+        try {
           const applicationId = applicationSelect.value;
-          compareVersionsBtn.disabled = applicationId === "all";
+          const applicationName =
+            applicationSelect.options[applicationSelect.selectedIndex].text;
 
-          if (compareVersionsBtn.disabled) {
-            compareVersionsBtn.classList.remove("btn-primary");
-            compareVersionsBtn.classList.add("btn-secondary");
-          } else {
-            compareVersionsBtn.classList.remove("btn-secondary");
-            compareVersionsBtn.classList.add("btn-primary");
+          // Update modal title to include application name
+          document.querySelector(
+            ".modal-header h3"
+          ).textContent = `Latest Versions for ${applicationName}`;
+
+          // Fetch deployments for the selected application
+          const url = `${APP_CONFIG.API_URL}/deployments/application/${applicationId}`;
+
+          const response = await fetch(url, {
+            headers: getApiKeyHeaders(),
+          });
+
+          if (!response.ok) {
+            throw new Error(response.statusText);
           }
+
+          const deployments = await response.json();
+
+          if (deployments.length === 0) {
+            versionComparisonContainer.innerHTML =
+              '<p class="empty-message">No deployments found for this application.</p>';
+            return;
+          }
+          console.log('Application tags:', deployments.map(d => d.Application_Tag));
+          // Get latest version for each region
+          const latestVersions = getLatestVersionsByRegion(deployments);
+
+          // Render the comparison table
+          renderVersionComparison(latestVersions);
+        } catch (error) {
+          console.error("Error loading version comparison:", error);
+          versionComparisonContainer.innerHTML =
+            '<p class="empty-message">Error loading version data. Please try again.</p>';
         }
+      }
 
-        // Event listeners
-        applicationSelect.addEventListener("change", () => {
-          loadDeployments();
-          updateCompareButtonState();
-        });
+      // Open modal
+      function openModal() {
+        versionModal.style.display = "block";
+        loadVersionComparison();
+      }
 
-        regionSelect.addEventListener("change", loadDeployments);
+      // Close modal
+      function closeModal() {
+        versionModal.style.display = "none";
+      }
 
-        // Compare versions button click
-        compareVersionsBtn.addEventListener("click", openModal);
+      // Update button state based on application selection
+      function updateCompareButtonState() {
+        const applicationId = applicationSelect.value;
+        compareVersionsBtn.disabled = applicationId === "all";
 
-        // Close modal when clicking the X
-        closeModalBtn.addEventListener("click", closeModal);
+        if (compareVersionsBtn.disabled) {
+          compareVersionsBtn.classList.remove("btn-primary");
+          compareVersionsBtn.classList.add("btn-secondary");
+        } else {
+          compareVersionsBtn.classList.remove("btn-secondary");
+          compareVersionsBtn.classList.add("btn-primary");
+        }
+      }
 
-        // Close modal when clicking outside the modal content
-        window.addEventListener("click", (event) => {
-          if (event.target === versionModal) {
-            closeModal();
-          }
-        });
-
-        // Also apply key when pressing Enter in the input field
-        apiKeyInput.addEventListener("keyup", (e) => {
-          if (e.key === "Enter") {
-            initializeWithApiKey();
-          }
-        });
-
-        // Initialize button state
+      // Event listeners
+      applicationSelect.addEventListener("change", () => {
+        loadDeployments();
         updateCompareButtonState();
       });
-    </script>
 
-    <!-- Modal for version comparison -->
-    <div id="version-modal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Latest Versions by Region</h3>
-          <span class="close-modal">&times;</span>
-        </div>
-        <div class="modal-body">
-          <div id="version-comparison-container">
-            <!-- Version comparison table will be loaded here -->
-          </div>
+      regionSelect.addEventListener("change", loadDeployments);
+
+      // Compare versions button click
+      compareVersionsBtn.addEventListener("click", openModal);
+
+      // Close modal when clicking the X
+      closeModalBtn.addEventListener("click", closeModal);
+
+      // Close modal when clicking outside the modal content
+      window.addEventListener("click", (event) => {
+        if (event.target === versionModal) {
+          closeModal();
+        }
+      });
+
+      // Also apply key when pressing Enter in the input field
+      apiKeyInput.addEventListener("keyup", (e) => {
+        if (e.key === "Enter") {
+          initializeWithApiKey();
+        }
+      });
+
+      // Initialize button state
+      updateCompareButtonState();
+    });
+  </script>
+
+  <!-- Modal for version comparison -->
+  <div id="version-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Latest Versions by Region</h3>
+        <span class="close-modal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div id="version-comparison-container">
+          <!-- Version comparison table will be loaded here -->
         </div>
       </div>
     </div>
-  </body>
+  </div>
+</body>
+
 </html>
